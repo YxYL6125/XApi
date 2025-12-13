@@ -11,92 +11,102 @@ interface ResponseViewerProps {
 export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error }) => {
   const [activeTab, setActiveTab] = useState<'body' | 'headers'>('body');
 
-  if (error) {
-    return (
-      <div className="h-full flex items-center justify-center text-red-600 p-4 text-center">
-        <div>
-          <h3 className="font-bold text-lg mb-2">Request Failed</h3>
-          <p>{error}</p>
-        </div>
-      </div>
-    );
-  }
+  const getStatusColor = (status: number) => {
+      if (status >= 200 && status < 300) return 'text-green-600';
+      if (status >= 400) return 'text-red-600';
+      return 'text-yellow-600';
+  };
 
-  if (!response) {
-    return (
-      <div className="h-full flex items-center justify-center text-gray-400">
-        Enter a URL and click Send to get a response
-      </div>
-    );
-  }
-
-  // Determine status color
-  const statusColor = response.status >= 200 && response.status < 300 
-    ? 'text-green-700 bg-green-100' 
-    : response.status >= 400 
-      ? 'text-red-700 bg-red-100' 
-      : 'text-yellow-700 bg-yellow-100';
-
-  let formattedBody = response.body;
-  try {
-    // Attempt pretty print
-    const json = JSON.parse(response.body);
-    formattedBody = JSON.stringify(json, null, 2);
-  } catch (e) {
-    // Not JSON, keep as is
-  }
+  const getStatusIcon = (status: number) => {
+      if (status >= 200 && status < 300) return (
+          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      );
+      if (status >= 400) return (
+          <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      );
+      return (
+           <svg className="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+      );
+  };
 
   return (
     <div className="flex flex-col h-full bg-white">
-      {/* Status Bar */}
-      <div className="p-3 border-b border-gray-200 bg-white shadow-sm z-10">
-        <div className="flex items-center space-x-6">
-            <div className="flex flex-col">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Status</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-bold ${statusColor}`}>
-                    {response.status} {response.statusText}
-                </span>
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Time</span>
-                <span className="text-xs font-medium text-gray-700">{response.time} ms</span>
-            </div>
-            <div className="flex flex-col">
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Size</span>
-                <span className="text-xs font-medium text-gray-700">{formatBytes(response.size)}</span>
-            </div>
-        </div>
-      </div>
+      {/* Header: Tabs + Status */}
+      <div className="flex justify-between items-center border-b border-gray-200 px-2 mt-1 min-h-[33px]">
+          {/* Left: Tabs */}
+          <div className="flex">
+            <button
+              onClick={() => setActiveTab('body')}
+              className={`px-4 py-2 text-xs font-bold tracking-wide uppercase border-b-2 transition-colors mb-[-1px] ${
+                activeTab === 'body' 
+                  ? 'border-green-600 text-green-700' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              BODY
+            </button>
+            <button
+              onClick={() => setActiveTab('headers')}
+              className={`px-4 py-2 text-xs font-bold tracking-wide uppercase border-b-2 transition-colors mb-[-1px] ${
+                activeTab === 'headers' 
+                  ? 'border-green-600 text-green-700' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              HEADERS
+            </button>
+          </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200 px-4 mt-2">
-        <button
-          onClick={() => setActiveTab('body')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'body' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
-        >
-          Response Body
-        </button>
-        <button
-          onClick={() => setActiveTab('headers')}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'headers' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
-        >
-          Headers
-        </button>
+          {/* Right: Status Metrics */}
+          {response && (
+             <div className="flex items-center text-xs space-x-3 pb-1 mr-2 select-text">
+                <div className={`flex items-center font-bold ${getStatusColor(response.status)}`}>
+                    {getStatusIcon(response.status)}
+                    <span>{response.status} {response.statusText}</span>
+                </div>
+                
+                <div className="text-gray-300">|</div>
+                
+                <div className="text-gray-600 flex items-center">
+                    <span className="font-medium mr-1">{response.time}</span> ms
+                </div>
+
+                <div className="text-gray-300">|</div>
+
+                <div className="text-gray-600 flex items-center">
+                    <span className="font-medium mr-1">{formatBytes(response.size)}</span>
+                </div>
+             </div>
+          )}
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-auto p-4">
-        {activeTab === 'body' && (
-          <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap overflow-x-auto">
-            {formattedBody}
-          </pre>
+      <div className="flex-1 overflow-auto p-4 bg-white relative">
+        {error && (
+            <div className="flex items-center justify-center h-full text-red-600 p-4">
+                <div className="text-center">
+                    <div className="text-lg font-bold mb-1">Request Failed</div>
+                    <p>{error}</p>
+                </div>
+            </div>
         )}
-        {activeTab === 'headers' && (
-          <div className="space-y-1">
+        
+        {!response && !error && (
+            <div className="flex items-center justify-center h-full text-gray-300 text-sm italic">
+                Send a request to see the response
+            </div>
+        )}
+
+        {response && !error && activeTab === 'body' && (
+             <ResponseContent body={response.body} />
+        )}
+        
+        {response && !error && activeTab === 'headers' && (
+          <div className="space-y-0.5">
             {Object.entries(response.headers).map(([key, val]) => (
-              <div key={key} className="grid grid-cols-3 gap-2 text-sm border-b border-gray-100 py-1">
-                <div className="font-semibold text-gray-700 truncate">{key}</div>
-                <div className="col-span-2 text-gray-600 break-all">{val}</div>
+              <div key={key} className="grid grid-cols-[120px_1fr] gap-2 text-xs py-1 border-b border-gray-50 hover:bg-gray-50">
+                <div className="font-semibold text-gray-700 truncate select-text" title={key}>{key}</div>
+                <div className="text-gray-600 break-all select-text font-mono">{val}</div>
               </div>
             ))}
           </div>
@@ -104,4 +114,18 @@ export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error 
       </div>
     </div>
   );
+};
+
+const ResponseContent = ({ body }: { body: string }) => {
+    let content = body;
+    try {
+        const json = JSON.parse(body);
+        content = JSON.stringify(json, null, 2);
+    } catch {}
+
+    return (
+        <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap overflow-x-auto h-full select-text">
+            {content}
+        </pre>
+    );
 };
