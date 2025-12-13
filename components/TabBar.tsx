@@ -128,9 +128,14 @@ export const TabBar: React.FC<TabBarProps> = ({
     }, []);
 
     return (
-        <div className="flex items-end bg-gray-100 border-b border-gray-200 pt-1 px-1 relative select-none">
+        <div className="flex items-end bg-gray-100 pt-1 px-1 relative select-none">
+            {/* Absolute border line: Acts as the bottom track. 
+                Active tab covers this because it has border-b-white and sits on top.
+                Inactive tabs have border-b-gray-200 which blends with this line. */}
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gray-200 z-0"></div>
+
             {/* Scrollable Area */}
-            <div className="flex-1 flex overflow-x-auto no-scrollbar items-end pr-8">
+            <div className="flex-1 flex overflow-x-auto no-scrollbar items-end pr-8 relative z-10">
                 {tabs.map(tab => (
                     <div 
                         key={tab.id}
@@ -144,8 +149,8 @@ export const TabBar: React.FC<TabBarProps> = ({
                         className={`
                             group flex items-center min-w-[140px] max-w-[200px] h-9 px-3 mr-1 text-xs cursor-pointer select-none border-t border-l border-r rounded-t-md transition-all relative flex-shrink-0
                             ${activeTabId === tab.id 
-                                ? 'bg-white border-gray-200 border-b border-b-white text-gray-800 font-medium z-10 -mb-px' 
-                                : 'bg-gray-100 border-transparent hover:bg-gray-200 text-gray-500 mb-0'}
+                                ? 'bg-white border-gray-200 border-b border-b-white text-gray-800 font-medium' 
+                                : 'bg-gray-100 border-transparent border-b border-b-gray-200 hover:bg-gray-200 text-gray-500'}
                             ${draggedTabId === tab.id ? 'opacity-50' : ''}
                         `}
                     >

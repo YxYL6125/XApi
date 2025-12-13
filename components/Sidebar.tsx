@@ -191,7 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => onTabChange('history')}
           className={`flex-1 py-2 text-center transition-colors ${activeTab === 'history' ? 'text-green-600 border-b-2 border-green-600' : 'text-gray-500 hover:text-gray-700'}`}
         >
-          History
+          Captured Requests
         </button>
       </div>
 
@@ -199,7 +199,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {activeTab === 'history' && (
           <div>
              <div className="p-2 bg-gray-100 flex justify-between items-center sticky top-0 z-10 border-b border-gray-200">
-                 <span className="text-xs font-bold text-gray-500">CAPTURED REQUESTS</span>
+                 <span className="text-xs font-bold text-gray-500">Captured Requests ({validHistory.length})</span>
                  <button onClick={onClearHistory} className="text-xs text-gray-400 hover:text-red-500">Clear</button>
              </div>
 

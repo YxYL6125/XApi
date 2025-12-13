@@ -328,18 +328,8 @@ const App: React.FC = () => {
     }
     
     // Better naming logic: use last part of path or host
-    let smartName = log.url;
-    try {
-        const u = new URL(log.url);
-        const pathParts = u.pathname.split('/').filter(p => p);
-        if (pathParts.length > 0) {
-            smartName = pathParts[pathParts.length - 1];
-        } else {
-            smartName = u.hostname;
-        }
-    } catch (e) {
-        smartName = log.url.substring(0, 20);
-    }
+    // User requested to use FULL URL as name
+    const smartName = log.url;
 
     const newReq: HttpRequest = {
         ...createNewRequest(),
