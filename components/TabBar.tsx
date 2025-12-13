@@ -144,7 +144,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                         className={`
                             group flex items-center min-w-[140px] max-w-[200px] h-9 px-3 mr-1 text-xs cursor-pointer select-none border-t border-l border-r rounded-t-md transition-all relative flex-shrink-0
                             ${activeTabId === tab.id 
-                                ? 'bg-white border-gray-200 border-b-white text-gray-800 font-medium z-10 -mb-px' 
+                                ? 'bg-white border-gray-200 border-b border-b-white text-gray-800 font-medium z-10 -mb-px' 
                                 : 'bg-gray-100 border-transparent hover:bg-gray-200 text-gray-500 mb-0'}
                             ${draggedTabId === tab.id ? 'opacity-50' : ''}
                         `}
