@@ -86,22 +86,22 @@ const Popup = () => {
       </div>
       
       {/* List */}
-      <div className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="flex-1 overflow-y-auto bg-gray-100">
         {validLogs.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2">
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-2 bg-gray-50">
                 <span className="text-2xl">📡</span>
                 <span className="text-xs">No requests found</span>
                 {isRecording && !searchTerm && <span className="text-[10px] text-green-600 animate-pulse">Recording...</span>}
             </div>
         ) : (
-            <ul className="divide-y divide-gray-200">
+            <ul className="flex flex-col gap-px">
                 {validLogs.map(log => {
                     const { origin, path } = formatUrl(log.url);
                     return (
                     <li 
                         key={log.id} 
                         onClick={() => openDashboard(log.id)}
-                        className="px-4 py-2 hover:bg-white cursor-pointer transition-colors border-l-4 border-transparent hover:border-green-500 bg-white mb-0.5"
+                        className="px-4 py-2 cursor-pointer transition-all border-l-4 border-transparent hover:border-green-500 bg-white hover:bg-gray-100"
                     >
                         <div className="flex items-center justify-between mb-1">
                              <span className={`text-[10px] font-bold px-1.5 rounded ${getMethodBadgeColor(log.method)}`}>
