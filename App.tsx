@@ -229,6 +229,13 @@ const App: React.FC = () => {
         const key = h.key.trim();
         const lowerKey = key.toLowerCase();
         
+        // CRITICAL FIX: Do NOT manually set Content-Type for form-data.
+        // If we set it, we lose the 'boundary' parameter, causing parsing errors in DevTools and Server.
+        // fetch() automatically sets the correct Content-Type with boundary when the body is a FormData object.
+        if (activeRequest.bodyType === 'form-data' && lowerKey === 'content-type') {
+            return;
+        }
+
         // Filter out pseudo-headers
         if (key && !key.startsWith(':')) {
              if (forbiddenHeaders.includes(lowerKey) || lowerKey.startsWith('sec-') || lowerKey.startsWith('proxy-')) {
@@ -261,6 +268,7 @@ const App: React.FC = () => {
         } else if (activeRequest.bodyType === 'x-www-form-urlencoded') {
             const usp = new URLSearchParams();
             activeRequest.bodyForm.filter(f => f.enabled).forEach(f => usp.append(f.key, f.value));
+            // URLSearchParams also automatically sets the correct content-type header
             options.body = usp;
         } else if (activeRequest.bodyType === 'form-data') {
             const fd = new FormData();
