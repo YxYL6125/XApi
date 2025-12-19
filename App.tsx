@@ -462,16 +462,13 @@ const App: React.FC = () => {
           const col = collections.find(c => c.id === id);
           if (col) {
               const reqIds = col.requests.map(r => r.id);
-              const newTabs = tabs.filter(t => !reqIds.includes(t.id));
-              setTabs(newTabs.length ? newTabs : [{ id: 'welcome', type: 'welcome', title: 'Welcome' }]);
-              if (newTabs.length > 0) setActiveTabId(newTabs[0].id);
-              else setActiveTabId('welcome');
+              reqIds.forEach(reqId => handleTabClose(reqId));
           }
       }
   };
 
   const handleDeleteRequest = (req: HttpRequest) => {
-      // Direct delete without confirmation
+      // Update collections
       const updatedCols = collections.map(c => ({
           ...c,
           requests: c.requests.filter(r => r.id !== req.id)
@@ -479,12 +476,8 @@ const App: React.FC = () => {
       setCollections(updatedCols);
       chrome.storage.local.set({ collections: updatedCols });
       
-      // Close tab
-      const newTabs = tabs.filter(t => t.id !== req.id);
-      setTabs(newTabs.length ? newTabs : [{ id: 'welcome', type: 'welcome', title: 'Welcome' }]);
-      if (activeTabId === req.id) {
-          setActiveTabId(newTabs.length ? newTabs[0].id : 'welcome');
-      }
+      // Close tab automatically
+      handleTabClose(req.id);
   };
 
   const handleDuplicateRequest = (reqId: string) => {
@@ -522,7 +515,8 @@ const App: React.FC = () => {
       const newHistory = history.filter(h => h.id !== id);
       setHistory(newHistory);
       chrome.storage.local.set({ logs: newHistory });
-      // We do NOT close the tab automatically if open, to allow user to continue using the imported request data
+      // Close tab automatically
+      handleTabClose(id);
   };
 
   const handleToggleCollapse = (colId: string) => {

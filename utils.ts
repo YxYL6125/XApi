@@ -95,22 +95,23 @@ export const parseCurl = (curlCommand: string): Partial<HttpRequest> | null => {
     bodyRaw: ''
   };
 
-  // Improved Method Parsing
-  const methodMatch = cleanCommand.match(/-X\s+([A-Z]+)/i);
+  // Improved Method Parsing: specifically looking for -X or --request
+  const methodMatch = cleanCommand.match(/(?:-X|--request)\s+([A-Z]+)/i);
   if (methodMatch) {
       request.method = methodMatch[1].toUpperCase() as any;
   }
 
-  // Improved URL Parsing: Specifically avoid picking up the method as the URL
-  // We look for strings starting with http, potentially in quotes
-  const urlRegex = /(?:https?:\/\/[^\s'"]+)|(?:['"]https?:\/\/[^\s'"]+['"])/;
+  // Improved URL Parsing: Specifically find strings that look like URLs (http/https)
+  // This avoids picking up flags or method names as the URL
+  const urlRegex = /(?:https?:\/\/[^\s'"]+)/i;
   const urlMatch = cleanCommand.match(urlRegex);
   if (urlMatch) {
-      request.url = urlMatch[0].replace(/['"]/g, '');
+      // Remove trailing quotes if they exist
+      request.url = urlMatch[0].replace(/['"]$/, '').replace(/^['"]/, '');
   }
 
   // Header parsing
-  const headerRegex = /-H\s+(['"])(.*?)\1/g;
+  const headerRegex = /(?:-H|--header)\s+(['"])(.*?)\1/g;
   let headerMatch;
   while ((headerMatch = headerRegex.exec(cleanCommand)) !== null) {
     const headerContent = headerMatch[2];
@@ -122,13 +123,14 @@ export const parseCurl = (curlCommand: string): Partial<HttpRequest> | null => {
     }
   }
 
-  // Body parsing
+  // Body parsing (support various data flags)
   const dataRegex = /(?:--data-raw|--data-binary|--data-urlencode|--data|-d)\s+(['"])([\s\S]*?)\1/;
   const dataMatch = cleanCommand.match(dataRegex);
   
   if (dataMatch) {
     request.bodyRaw = dataMatch[2];
     request.bodyType = 'raw';
+    // If body exists and no method specified, default to POST
     if (!methodMatch) {
         request.method = 'POST';
     }

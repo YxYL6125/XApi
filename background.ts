@@ -2,6 +2,7 @@
 // background.ts
 
 const MAX_LOGS = 100;
+const EXTENSION_ID = chrome.runtime.id;
 
 // Store pending requests in memory to correlate headers/body/completion
 const pendingRequests: Record<string, any> = {};
@@ -113,17 +114,23 @@ const saveLog = (log: any) => {
   saveQueue.push(log);
   processQueue();
 };
+
+const isExtensionRequest = (details: any) => {
+    // Check if the request is initiated by our own extension
+    return (
+        details.initiator?.includes(EXTENSION_ID) ||
+        details.url.startsWith('chrome-extension://') || 
+        details.url.startsWith('data:') || 
+        details.url.startsWith('blob:')
+    );
+};
+
 // --------------------------------------------
 
 // 1. Capture Request Body & Basic Info
 chrome.webRequest.onBeforeRequest.addListener(
   (details: any) => {
-    if (
-        details.url.startsWith('chrome-extension://') || 
-        details.url.startsWith('data:') || 
-        details.url.startsWith('blob:') ||
-        details.type === 'ping'
-    ) {
+    if (isExtensionRequest(details) || details.type === 'ping') {
         return;
     }
 
