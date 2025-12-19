@@ -1,7 +1,7 @@
 declare var chrome: any;
 
 chrome.devtools.panels.create(
-  "HTTP CaptureExt Client",
+  "CaptureExt",
   "", // Icon path
   "panel.html",
   (panel: any) => {
