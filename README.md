@@ -1,82 +1,89 @@
-# CaptureApi HTTP Client - Api Testing Tool
+# ⚡ CaptureApi HTTP Client
 
-A powerful, open-source Chrome Extension built with **Manifest V3** that acts as a lightweight Postman alternative directly inside your Chrome DevTools. Intercept, debug, edit, and replay HTTP requests without leaving the browser.
+> **Professional HTTP Debugging & Replay Tool for Chrome**
 
-![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)
-![Version](https://img.shields.io/badge/version-1.0.1-green)
+CaptureApi is a high-performance, open-source Chrome Extension (Manifest V3) that brings a powerful, Postman-like experience directly into your browser's DevTools. It specializes in intercepting, debugging, editing, and replaying HTTP requests with unique support for modifying sensitive headers like `Cookie` and `Origin`.
+
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+![Version](https://img.shields.io/badge/version-1.0.5-green)
 ![Manifest](https://img.shields.io/badge/Manifest-V3-orange)
 
-## ✨ Features
+---
 
-*   **⚡ Intercept & Record**: Automatically capture HTTP traffic (Fetch/XHR) from the current tab.
-*   **🛠️ Postman-like Interface**: Full-featured request editor for Parameters, Headers, and Body (JSON, Form-Data, x-www-form-urlencoded, Raw).
-*   **🔄 Replay Requests**: Modify and resend captured requests instantly.
-*   **📂 Collections**: Organize your requests into folders/collections for better workflow management.
-*   **📜 History Log**: Keep track of all captured requests with status codes, timing, and size metrics.
-*   **📥 cURL Import**: Import requests via raw cURL commands.
-*   **📑 Multi-Tab Interface**: Work on multiple requests simultaneously using a tabbed workspace.
-*   **🎨 Syntax Highlighting**: JSON formatting and colored HTTP methods for better readability.
+## 📸 Overview
 
-## 🚀 Tech Stack
+### Full Dashboard Workspace
+*Manage collections and complex requests in a dedicated window.*
+<img width="100%" alt="CaptureApi Dashboard" src="https://github.com/user-attachments/assets/28878d8d-c4eb-4cd3-8973-dc6b240f858b" />
 
-*   **Core**: [React 19](https://react.dev/)
-*   **Build Tool**: [Vite](https://vitejs.dev/)
-*   **Styling**: [Tailwind CSS](https://tailwindcss.com/)
-*   **Language**: [TypeScript](https://www.typescriptlang.org/)
-*   **Platform**: Chrome Extension API (Manifest V3)
+### Integrated DevTools Panel
+*Debug directly while you browse without switching tabs.*
+<img width="100%" alt="CaptureApi DevTools" src="https://github.com/user-attachments/assets/c46f6d23-9c27-4de9-9bec-a7d13a13bc83" />
 
-## 🛠️ Development Setup
+---
 
-1.  **Clone the repository**
+## ✨ Key Features
+
+- **🚀 Real-time Interception**: Automatically capture Fetch and XHR traffic from the active tab.
+- **🛡️ Sensitive Header Injection**: Industry-leading support for overriding `Cookie`, `Origin`, and `Referer` using `declarativeNetRequest` (DNR) to bypass standard browser security blocks.
+- **📂 Collection Management**: Organize your workspace with nested collections and persistent storage.
+- **🔄 Smart Replay**: One-click "Send" to replay captured requests with modified parameters or headers.
+- **📥 cURL Integration**: Paste raw cURL commands to instantly generate fully editable request objects.
+- **📑 Multi-Tab Workspace**: Handle multiple debugging sessions simultaneously with a familiar tab-based UI.
+- **🔍 Advanced Inspection**: Pre-formatted JSON view, response timing, and size metrics.
+
+---
+
+## 🛠️ Tech Stack
+
+- **Framework**: [React 19](https://react.dev/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Core Engine**: Chrome Extensions API (Manifest V3 + DNR)
+
+---
+
+## 🚀 Getting Started
+
+### Installation
+
+1.  **Clone & Build**:
     ```bash
     git clone https://github.com/lustan/CaptureApi.git
     cd CaptureApi
-    ```
-
-2.  **Install dependencies**
-    ```bash
     npm install
-    # or
-    yarn install
-    ```
-
-3.  **Run in development mode** (watch for changes)
-    ```bash
-    npm run dev
-    ```
-
-4.  **Build for production**
-    ```bash
     npm run build
     ```
+2.  **Load in Chrome**:
+    - Go to `chrome://extensions/`
+    - Enable **Developer mode** (top right)
+    - Click **Load unpacked** and select the `dist` folder.
 
-## 📦 Installation in Chrome
+### How to Use
 
-1.  Run the build command: `npm run build`. This will create a `dist` folder.
-2.  Open Chrome and navigate to `chrome://extensions/`.
-3.  Enable **Developer mode** in the top right corner.
-4.  Click **Load unpacked**.
-5.  Select the `dist` folder generated in step 1.
+1.  Open **Chrome DevTools** (`F12` or `Ctrl+Shift+I`).
+2.  Switch to the **CaptureApi** tab.
+3.  Interactions on the current page will appear in the **Captured** history.
+4.  Select any request to edit its body, headers, or query params and hit **SEND**.
 
-## 📖 Usage
-
-1.  Open the website you want to debug.
-2.  Open Chrome DevTools (`F12` or `Right Click -> Inspect`).
-3.  Navigate to the **"HTTP Tool"** tab in the DevTools panel.
-4.  (Optional) Click the extension icon in the browser toolbar to toggle "Recording" mode or view a quick list of logs.
-5.  Start interacting with the page; requests will appear in the **History** sidebar.
-6.  Click a request to edit and replay it.
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We love contributions! Whether it's a bug report, a feature request, or a pull request, we value your input.
 
-1.  Fork the Project
-2.  Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3.  Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4.  Push to the Branch (`git push origin feature/AmazingFeature`)
-5.  Open a Pull Request
+1.  **Fork** the project.
+2.  **Create** your feature branch (`git checkout -b feature/CoolFeature`).
+3.  **Commit** your changes (`git commit -m 'Add CoolFeature'`).
+4.  **Push** to the branch (`git push origin feature/CoolFeature`).
+5.  **Open** a Pull Request.
+
+---
 
 ## 📄 License
 
-Distributed under the Apache 2.0 License. See `LICENSE` for more information.
+Distributed under the **Apache 2.0 License**. See [LICENSE](LICENSE) for details.
+
+---
+<p align="center">Made with ❤️ by the CaptureApi Team</p>
