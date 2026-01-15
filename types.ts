@@ -54,20 +54,23 @@ export interface LoggedRequest {
   requestHeaders?: Record<string, string>;
   requestBody?: string | Record<string, any>; // Parsed body or raw string
   responseHeaders?: Record<string, string>;
+  responseBody?: string;
+  size?: number;
+  errorMessage?: string;
 }
 
 export type SidebarTab = 'collections' | 'history';
 
 // New: Tab Interface
 export interface TabItem {
-    id: string; // usually requestId or 'welcome'
-    type: 'request' | 'welcome';
-    title: string;
-    method?: HttpMethod;
-    isDirty?: boolean; // Has unsaved changes (optional for future)
-    data?: HttpRequest; // The actual request object if it's a request tab
-    // Persist response state per tab
-    response?: HttpResponse | null;
-    error?: string | null;
-    isLoading?: boolean;
+  id: string; // usually requestId or 'welcome'
+  type: 'request' | 'welcome';
+  title: string;
+  method?: HttpMethod;
+  isDirty?: boolean; // Has unsaved changes (optional for future)
+  data?: HttpRequest; // The actual request object if it's a request tab
+  // Persist response state per tab
+  response?: HttpResponse | null;
+  error?: string | null;
+  isLoading?: boolean;
 }

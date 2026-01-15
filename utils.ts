@@ -18,17 +18,17 @@ export const getMethodColor = (method?: string): string => {
 };
 
 export const getMethodBadgeColor = (method?: string): string => {
-    const m = method?.toUpperCase() || '';
-    switch (m) {
-        case 'GET': return 'bg-green-100 text-green-700';
-        case 'POST': return 'bg-yellow-100 text-yellow-700';
-        case 'PUT': return 'bg-blue-100 text-blue-700';
-        case 'DELETE': return 'bg-red-100 text-red-700';
-        case 'PATCH': return 'bg-purple-100 text-purple-700';
-        case 'OPTIONS': return 'bg-indigo-100 text-indigo-700';
-        case 'HEAD': return 'bg-teal-100 text-teal-700';
-        default: return 'bg-gray-100 text-gray-700';
-    }
+  const m = method?.toUpperCase() || '';
+  switch (m) {
+    case 'GET': return 'bg-green-100 text-green-700';
+    case 'POST': return 'bg-yellow-100 text-yellow-700';
+    case 'PUT': return 'bg-blue-100 text-blue-700';
+    case 'DELETE': return 'bg-red-100 text-red-700';
+    case 'PATCH': return 'bg-purple-100 text-purple-700';
+    case 'OPTIONS': return 'bg-indigo-100 text-indigo-700';
+    case 'HEAD': return 'bg-teal-100 text-teal-700';
+    default: return 'bg-gray-100 text-gray-700';
+  }
 };
 
 const sanitizeForCurl = (str: string): string => {
@@ -43,13 +43,13 @@ const escapeShellArg = (arg: string): string => {
 
 export const generateCurl = (log: LoggedRequest): string => {
   let curl = `curl -X ${log.method} ${escapeShellArg(sanitizeForCurl(log.url))}`;
-  
+
   if (log.requestHeaders) {
     Object.entries(log.requestHeaders).forEach(([key, value]) => {
       curl += ` \\\n  -H ${escapeShellArg(`${key}: ${value}`)}`;
     });
   }
-  
+
   if (log.requestBody) {
     let body = log.requestBody;
     if (typeof body === 'object') {
@@ -61,41 +61,41 @@ export const generateCurl = (log: LoggedRequest): string => {
       curl += ` \\\n  --data-raw ${escapeShellArg(sanitizeForCurl(String(body)))}`;
     }
   }
-  
+
   return curl;
 };
 
 export const generateCurlFromRequest = (req: HttpRequest): string => {
-    let curl = `curl -X ${req.method} ${escapeShellArg(sanitizeForCurl(req.url))}`;
-    
-    req.headers.filter(h => h.enabled && h.key).forEach(h => {
-        curl += ` \\\n  -H ${escapeShellArg(`${h.key}: ${h.value}`)}`;
-    });
+  let curl = `curl -X ${req.method} ${escapeShellArg(sanitizeForCurl(req.url))}`;
 
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-        if (req.bodyType === 'raw' && req.bodyRaw) {
-            curl += ` \\\n  --data-raw ${escapeShellArg(sanitizeForCurl(req.bodyRaw))}`;
-        } else if (req.bodyType === 'x-www-form-urlencoded') {
-            req.bodyForm.filter(f => f.enabled && f.key).forEach(f => {
-                curl += ` \\\n  --data ${escapeShellArg(`${f.key}=${f.value}`)}`;
-            });
-        } else if (req.bodyType === 'form-data') {
-            req.bodyForm.filter(f => f.enabled && f.key).forEach(f => {
-                const prefix = f.type === 'file' ? '@' : '';
-                curl += ` \\\n  --form ${escapeShellArg(`${f.key}=${prefix}${f.value}`)}`;
-            });
-        }
+  req.headers.filter(h => h.enabled && h.key).forEach(h => {
+    curl += ` \\\n  -H ${escapeShellArg(`${h.key}: ${h.value}`)}`;
+  });
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    if (req.bodyType === 'raw' && req.bodyRaw) {
+      curl += ` \\\n  --data-raw ${escapeShellArg(sanitizeForCurl(req.bodyRaw))}`;
+    } else if (req.bodyType === 'x-www-form-urlencoded') {
+      req.bodyForm.filter(f => f.enabled && f.key).forEach(f => {
+        curl += ` \\\n  --data ${escapeShellArg(`${f.key}=${f.value}`)}`;
+      });
+    } else if (req.bodyType === 'form-data') {
+      req.bodyForm.filter(f => f.enabled && f.key).forEach(f => {
+        const prefix = f.type === 'file' ? '@' : '';
+        curl += ` \\\n  --form ${escapeShellArg(`${f.key}=${prefix}${f.value}`)}`;
+      });
     }
-    
-    return curl;
+  }
+
+  return curl;
 };
 
 export const parseCurl = (curlCommand: string): Partial<HttpRequest> | null => {
   if (!curlCommand || !curlCommand.trim().toLowerCase().startsWith('curl')) return null;
 
   const cleanCommand = curlCommand
-    .replace(/\\\r?\n/g, ' ') 
-    .replace(/[\r\n]+/g, ' ') 
+    .replace(/\\\r?\n/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
     .trim();
 
   const request: Partial<HttpRequest> = {
@@ -108,26 +108,26 @@ export const parseCurl = (curlCommand: string): Partial<HttpRequest> | null => {
 
   const methodMatch = cleanCommand.match(/(?:-X|--request)\s+([A-Z]+)/i);
   if (methodMatch) {
-      request.method = methodMatch[1].toUpperCase() as any;
+    request.method = methodMatch[1].toUpperCase() as any;
   }
 
   const urlRegex = /(?:https?:\/\/[^\s'"]+)/i;
   const urlMatch = cleanCommand.match(urlRegex);
   if (urlMatch) {
-      let urlStr = urlMatch[0];
-      if ((urlStr.startsWith("'") && urlStr.endsWith("'")) || (urlStr.startsWith('"') && urlStr.endsWith('"'))) {
-          urlStr = urlStr.slice(1, -1);
-      }
-      request.url = urlStr;
+    let urlStr = urlMatch[0];
+    if ((urlStr.startsWith("'") && urlStr.endsWith("'")) || (urlStr.startsWith('"') && urlStr.endsWith('"'))) {
+      urlStr = urlStr.slice(1, -1);
+    }
+    request.url = urlStr;
 
-      try {
-          const urlObj = new URL(urlStr);
-          const params: KeyValue[] = [];
-          urlObj.searchParams.forEach((value, key) => {
-              params.push({ id: generateId(), key, value, enabled: true });
-          });
-          if (params.length > 0) request.params = params;
-      } catch (e) {}
+    try {
+      const urlObj = new URL(urlStr);
+      const params: KeyValue[] = [];
+      urlObj.searchParams.forEach((value, key) => {
+        params.push({ id: generateId(), key, value, enabled: true });
+      });
+      if (params.length > 0) request.params = params;
+    } catch (e) { }
   }
 
   const headerRegex = /(?:-H|--header)\s+(['"])(.*?)\1/g;
@@ -136,26 +136,26 @@ export const parseCurl = (curlCommand: string): Partial<HttpRequest> | null => {
     const headerContent = headerMatch[2];
     const separatorIndex = headerContent.indexOf(':');
     if (separatorIndex > 0) {
-        const key = headerContent.substring(0, separatorIndex).trim();
-        const value = headerContent.substring(separatorIndex + 1).trim();
-        request.headers?.push({ id: generateId(), key, value, enabled: true });
+      const key = headerContent.substring(0, separatorIndex).trim();
+      const value = headerContent.substring(separatorIndex + 1).trim();
+      request.headers?.push({ id: generateId(), key, value, enabled: true });
     }
   }
 
   const dataRegex = /(?:--data-raw|--data-binary|--data-urlencode|--data|-d|--form|-F)\s+(['"])([\s\S]*?)\1/;
   const dataMatch = cleanCommand.match(dataRegex);
-  
+
   if (dataMatch) {
     const matchedArg = dataMatch[0];
     if (matchedArg.includes('--form') || matchedArg.includes('-F')) {
-        request.bodyType = 'form-data';
-        const pair = dataMatch[2].split('=');
-        if (pair.length >= 2) {
-            request.bodyForm = [{ id: generateId(), key: pair[0], value: pair.slice(1).join('='), enabled: true, type: 'text' }];
-        }
+      request.bodyType = 'form-data';
+      const pair = dataMatch[2].split('=');
+      if (pair.length >= 2) {
+        request.bodyForm = [{ id: generateId(), key: pair[0], value: pair.slice(1).join('='), enabled: true, type: 'text' }];
+      }
     } else {
-        request.bodyRaw = dataMatch[2];
-        request.bodyType = 'raw';
+      request.bodyRaw = dataMatch[2];
+      request.bodyType = 'raw';
     }
     if (!methodMatch) request.method = 'POST';
   }
@@ -193,19 +193,117 @@ export const formatBytes = (bytes: number, decimals = 2) => {
 };
 
 export const formatUrl = (urlString: string) => {
-    try {
-        const url = new URL(urlString);
-        return {
-            origin: url.origin,
-            path: url.pathname + url.search
-        };
-    } catch (e) {
-        return { origin: urlString, path: '' };
-    }
+  try {
+    const url = new URL(urlString);
+    return {
+      origin: url.origin,
+      path: url.pathname + url.search
+    };
+  } catch (e) {
+    return { origin: urlString, path: '' };
+  }
 };
 
 export const formatTime = (timestamp: number): string => {
-    if (!timestamp) return '';
-    const d = new Date(timestamp);
-    return d.toLocaleTimeString('en-US', { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  if (!timestamp) return '';
+  const d = new Date(timestamp);
+  return d.toLocaleTimeString('en-US', { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+};
+
+export const parseSwagger = (jsonContent: string): HttpRequest[] => {
+  try {
+    const spec = JSON.parse(jsonContent);
+    const requests: HttpRequest[] = [];
+
+    if (!spec.paths) return [];
+
+    const baseUrl = spec.servers?.[0]?.url || `http://${spec.host || 'localhost'}${spec.basePath || ''}`;
+
+    Object.entries(spec.paths).forEach(([pathName, methods]: [string, any]) => {
+      Object.entries(methods).forEach(([methodName, details]: [string, any]) => {
+        if (['get', 'post', 'put', 'delete', 'patch', 'head', 'options'].includes(methodName.toLowerCase())) {
+          const reqId = generateId();
+          let url = baseUrl + pathName;
+          // Handle path parameters conversion {param} -> :param or keep as is? 
+          // Let's keep as is or simple placeholders.
+
+          const headers: KeyValue[] = [];
+          const params: KeyValue[] = [];
+          let bodyType: HttpRequest['bodyType'] = 'none';
+          let bodyRaw = '';
+          let bodyForm: KeyValue[] = [];
+
+          // Parameters
+          if (details.parameters) {
+            details.parameters.forEach((param: any) => {
+              if (param.in === 'query') {
+                params.push({ id: generateId(), key: param.name, value: '', enabled: true });
+              } else if (param.in === 'header') {
+                headers.push({ id: generateId(), key: param.name, value: '', enabled: true });
+              }
+            });
+          }
+
+          // Body (OpenAPI v3)
+          if (details.requestBody && details.requestBody.content) {
+            const content = details.requestBody.content;
+            if (content['application/json']) {
+              bodyType = 'raw';
+              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
+              // Try to generate sample JSON from schema? For now leave empty or {}
+              bodyRaw = '{}';
+            } else if (content['application/x-www-form-urlencoded']) {
+              bodyType = 'x-www-form-urlencoded';
+              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
+            } else if (content['multipart/form-data']) {
+              bodyType = 'form-data';
+              // headers.push({ id: generateId(), key: 'Content-Type', value: 'multipart/form-data', enabled: true }); // Browser sets this
+            }
+          }
+
+          // Body (Swagger v2)
+          if (details.parameters) {
+            const bodyParam = details.parameters.find((p: any) => p.in === 'body');
+            if (bodyParam) {
+              bodyType = 'raw';
+              bodyRaw = '{}';
+              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
+            }
+            const formDataParams = details.parameters.filter((p: any) => p.in === 'formData');
+            if (formDataParams.length > 0) {
+              // Check consumes
+              const consumes = details.consumes || spec.consumes || [];
+              if (consumes.includes('multipart/form-data')) {
+                bodyType = 'form-data';
+              } else {
+                bodyType = 'x-www-form-urlencoded';
+                headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
+              }
+              formDataParams.forEach((p: any) => {
+                bodyForm.push({ id: generateId(), key: p.name, value: '', enabled: true, type: p.type === 'file' ? 'file' : 'text' });
+              });
+            }
+          }
+
+          requests.push({
+            id: reqId,
+            name: details.summary || `${methodName.toUpperCase()} ${pathName}`,
+            url: url,
+            method: methodName.toUpperCase() as any,
+            headers,
+            params,
+            bodyType,
+            bodyRaw,
+            bodyForm,
+            bodyRawType: 'json'
+          });
+        }
+      });
+    });
+
+    return requests;
+  } catch (e) {
+    console.error("Failed to parse Swagger", e);
+    return [];
+  }
 };
