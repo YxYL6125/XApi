@@ -9,6 +9,15 @@ export interface KeyValue {
   enabled: boolean;
   type?: 'text' | 'file'; // For form-data
   file?: File; // Store the actual file object
+  description?: string; // Parameter description from Swagger
+}
+
+// Expected response structure parsed from Swagger
+export interface ExpectedResponse {
+  status: number;
+  description?: string;
+  schema?: any; // JSON Schema object
+  example?: string; // Generated example JSON string
 }
 
 export interface HttpRequest {
@@ -24,6 +33,9 @@ export interface HttpRequest {
   bodyRaw: string;
   bodyForm: KeyValue[]; // Used for both multipart and urlencoded
   bodyRawType?: 'json' | 'text' | 'html' | 'xml';
+  // Swagger-imported metadata
+  description?: string;
+  expectedResponse?: ExpectedResponse;
 }
 
 export interface HttpResponse {
@@ -42,6 +54,11 @@ export interface CollectionItem {
   name: string;
   collapsed?: boolean;
   requests: HttpRequest[];
+  // Nested sub-collections for tag-based grouping
+  subCollections?: CollectionItem[];
+  // Mark as Swagger-imported root for upsert matching
+  isSwaggerRoot?: boolean;
+  description?: string;
 }
 
 export interface LoggedRequest {

@@ -8,7 +8,7 @@ import { WelcomeScreen } from './components/WelcomeScreen';
 import { Modal } from './components/Modal';
 import { TabBar } from './components/TabBar';
 import { HttpRequest, HttpResponse, LoggedRequest, SidebarTab, CollectionItem, KeyValue, TabItem } from './types';
-import { generateId, queryStringToParams, parseCurl, parseSwagger } from './utils';
+import { generateId, queryStringToParams, parseCurl, parseSwagger, SwaggerParseResult, TagGroup } from './utils';
 
 // 浏览器禁止通过 fetch 接口设置的请求头列表
 const FORBIDDEN_HEADERS = [
@@ -437,25 +437,59 @@ const App: React.FC = () => {
     };
 
     const handleImportSwaggerConfirm = () => {
-        const requests = parseSwagger(swaggerInput);
-        if (requests && requests.length > 0) {
-            const newColId = generateId();
-            const newCol: CollectionItem = {
-                id: newColId,
-                name: 'Imported Swagger',
-                requests: requests, // requests already have unique IDs from parseSwagger
+        const result = parseSwagger(swaggerInput);
+        if (!result || result.tagGroups.length === 0) {
+            alert('Failed to parse Swagger JSON or no requests found.');
+            return;
+        }
+
+        const swaggerColName = result.apiTitle;
+
+        // Create sub-collections from tag groups
+        const subCollections: CollectionItem[] = result.tagGroups.map(tag => ({
+            id: generateId(),
+            name: tag.name,
+            description: tag.description,
+            requests: tag.requests,
+            collapsed: false
+        }));
+
+        // Count total requests
+        const totalRequests = result.tagGroups.reduce((acc, tag) => acc + tag.requests.length, 0);
+
+        // Find existing Swagger root collection with same name (for upsert)
+        const existingIdx = collections.findIndex(c => c.name === swaggerColName && c.isSwaggerRoot);
+
+        let nextCols: CollectionItem[];
+        if (existingIdx >= 0) {
+            // Upsert: Replace existing collection's subCollections
+            nextCols = [...collections];
+            nextCols[existingIdx] = {
+                ...nextCols[existingIdx],
+                subCollections,
                 collapsed: false
             };
-            const nextCols = [...collections, newCol];
-            setCollections(nextCols);
-            chrome.storage.local.set({ collections: nextCols });
-            setSidebarTab('collections');
-            setIsSwaggerModalOpen(false);
-            setSwaggerInput('');
-            alert(`Imported ${requests.length} requests into new collection.`);
         } else {
-            alert('Failed to parse Swagger JSON or no requests found.');
+            // Create new root collection with nested sub-collections
+            const newCol: CollectionItem = {
+                id: generateId(),
+                name: swaggerColName,
+                isSwaggerRoot: true,
+                subCollections,
+                requests: [], // Root has no direct requests
+                collapsed: false
+            };
+            nextCols = [...collections, newCol];
         }
+
+        setCollections(nextCols);
+        chrome.storage.local.set({ collections: nextCols });
+        setSidebarTab('collections');
+        setIsSwaggerModalOpen(false);
+        setSwaggerInput('');
+
+        const action = existingIdx >= 0 ? 'Updated' : 'Imported';
+        alert(`${action} ${totalRequests} requests in ${result.tagGroups.length} groups.`);
     };
 
     const handleClearAllData = () => {
@@ -492,7 +526,23 @@ const App: React.FC = () => {
                     onDeleteLog={(id) => { const next = history.filter(h => h.id !== id); setHistory(next); chrome.storage.local.set({ logs: next }); handleTabClose(id); }}
                     onRenameCollection={(id, name) => { const next = collections.map(c => c.id === id ? { ...c, name } : c); setCollections(next); chrome.storage.local.set({ collections: next }); }}
                     onRenameRequest={handleRenameRequest}
-                    onDeleteCollection={(id) => { if (confirm('Delete this collection?')) { const next = collections.filter(c => c.id !== id); setCollections(next); chrome.storage.local.set({ collections: next }); } }}
+                    onDeleteCollection={(id) => {
+                        const colToDelete = collections.find(c => c.id === id);
+                        if (!colToDelete) return;
+
+                        // Close tabs for all requests in this collection (including subCollections)
+                        const requestIdsToClose: string[] = [...colToDelete.requests.map(r => r.id)];
+                        if (colToDelete.subCollections) {
+                            colToDelete.subCollections.forEach(sub => {
+                                sub.requests.forEach(r => requestIdsToClose.push(r.id));
+                            });
+                        }
+                        requestIdsToClose.forEach(reqId => handleTabClose(reqId));
+
+                        const next = collections.filter(c => c.id !== id);
+                        setCollections(next);
+                        chrome.storage.local.set({ collections: next });
+                    }}
                     onDeleteRequest={(req) => { const nextRoots = rootRequests.filter(r => r.id !== req.id); const nextCols = collections.map(c => ({ ...c, requests: c.requests.filter(r => r.id !== req.id) })); setRootRequests(nextRoots); setCollections(nextCols); chrome.storage.local.set({ rootRequests: nextRoots, collections: nextCols }); handleTabClose(req.id); }}
                     onDuplicateRequest={(reqId) => {
                         let found = rootRequests.find(r => r.id === reqId) || collections.flatMap(c => c.requests).find(r => r.id === reqId);
@@ -507,7 +557,24 @@ const App: React.FC = () => {
                             }
                         }
                     }}
-                    onToggleCollapse={(id) => { setCollections(collections.map(c => c.id === id ? { ...c, collapsed: !c.collapsed } : c)); }}
+                    onToggleCollapse={(id) => {
+                        setCollections(collections.map(c => {
+                            // Check if it's the top-level collection
+                            if (c.id === id) {
+                                return { ...c, collapsed: !c.collapsed };
+                            }
+                            // Check if it's a subCollection
+                            if (c.subCollections) {
+                                return {
+                                    ...c,
+                                    subCollections: c.subCollections.map(sub =>
+                                        sub.id === id ? { ...sub, collapsed: !sub.collapsed } : sub
+                                    )
+                                };
+                            }
+                            return c;
+                        }));
+                    }}
                     onMoveRequest={handleSaveToCollection}
                     isRecording={isRecording}
                     onToggleRecording={() => { setIsRecording(!isRecording); chrome.storage.local.set({ isRecording: !isRecording }); }}
@@ -537,7 +604,7 @@ const App: React.FC = () => {
                                     <RequestEditor request={activeRequest} onRequestChange={updateActiveRequest} />
                                 </div>
                                 <div className="w-1/2 min-w-[400px] h-full overflow-hidden">
-                                    <ResponseViewer response={activeResponse} error={activeError} />
+                                    <ResponseViewer response={activeResponse} error={activeError} expectedResponse={activeRequest?.expectedResponse} />
                                 </div>
                             </div>
                         </>

@@ -1,5 +1,5 @@
 
-import { KeyValue, HttpRequest, LoggedRequest } from './types';
+import { KeyValue, HttpRequest, LoggedRequest, ExpectedResponse } from './types';
 
 export const generateId = (): string => Math.random().toString(36).substr(2, 9);
 
@@ -210,100 +210,389 @@ export const formatTime = (timestamp: number): string => {
   return d.toLocaleTimeString('en-US', { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
 };
 
-export const parseSwagger = (jsonContent: string): HttpRequest[] => {
+// --- Swagger/OpenAPI Parser Types ---
+export interface SwaggerParseResult {
+  apiTitle: string;
+  tagGroups: TagGroup[];
+}
+
+export interface TagGroup {
+  name: string;
+  description?: string;
+  requests: HttpRequest[];
+}
+
+// --- Swagger Helper Functions ---
+
+/**
+ * Generate example value for a parameter based on its schema
+ */
+const generateExampleValue = (param: any): string => {
+  // Check explicit example/default values
+  if (param.example !== undefined) return String(param.example);
+  if (param.default !== undefined) return String(param.default);
+  if (param.schema?.example !== undefined) return String(param.schema.example);
+  if (param.schema?.default !== undefined) return String(param.schema.default);
+
+  // Generate based on type
+  const type = param.type || param.schema?.type;
+  const format = param.format || param.schema?.format;
+
+  switch (type) {
+    case 'integer':
+      return format === 'int64' ? '0' : '0';
+    case 'number':
+      return '0.0';
+    case 'boolean':
+      return 'true';
+    case 'array':
+      return '';
+    case 'string':
+      if (format === 'date') return new Date().toISOString().split('T')[0];
+      if (format === 'date-time') return new Date().toISOString();
+      if (format === 'email') return 'user@example.com';
+      if (format === 'uuid') return '00000000-0000-0000-0000-000000000000';
+      if (param.enum && param.enum.length > 0) return param.enum[0];
+      return '';
+    default:
+      return '';
+  }
+};
+
+/**
+ * Recursively generate example JSON from OpenAPI schema
+ */
+const generateExampleFromSchema = (schema: any, definitions?: any, visited: Set<string> = new Set()): any => {
+  if (!schema) return null;
+
+  // Handle $ref
+  if (schema.$ref) {
+    const refPath = schema.$ref.replace('#/definitions/', '').replace('#/components/schemas/', '');
+    if (visited.has(refPath)) return {}; // Prevent circular reference
+    visited.add(refPath);
+    const refSchema = definitions?.[refPath];
+    if (refSchema) {
+      return generateExampleFromSchema(refSchema, definitions, visited);
+    }
+    return {};
+  }
+
+  // Check for explicit example
+  if (schema.example !== undefined) return schema.example;
+
+  // Handle by type
+  switch (schema.type) {
+    case 'object': {
+      const obj: Record<string, any> = {};
+      if (schema.properties) {
+        Object.entries(schema.properties).forEach(([key, propSchema]: [string, any]) => {
+          obj[key] = generateExampleFromSchema(propSchema, definitions, new Set(visited));
+        });
+      }
+      return obj;
+    }
+    case 'array': {
+      const itemExample = generateExampleFromSchema(schema.items, definitions, new Set(visited));
+      return itemExample !== null ? [itemExample] : [];
+    }
+    case 'string':
+      if (schema.enum && schema.enum.length > 0) return schema.enum[0];
+      if (schema.format === 'date') return new Date().toISOString().split('T')[0];
+      if (schema.format === 'date-time') return new Date().toISOString();
+      return 'string';
+    case 'integer':
+      return 0;
+    case 'number':
+      return 0.0;
+    case 'boolean':
+      return true;
+    default:
+      // Try allOf, oneOf, anyOf
+      if (schema.allOf && Array.isArray(schema.allOf)) {
+        let merged = {};
+        schema.allOf.forEach((s: any) => {
+          const part = generateExampleFromSchema(s, definitions, new Set(visited));
+          if (typeof part === 'object' && part !== null) {
+            merged = { ...merged, ...part };
+          }
+        });
+        return merged;
+      }
+      if (schema.oneOf && Array.isArray(schema.oneOf) && schema.oneOf.length > 0) {
+        return generateExampleFromSchema(schema.oneOf[0], definitions, visited);
+      }
+      if (schema.anyOf && Array.isArray(schema.anyOf) && schema.anyOf.length > 0) {
+        return generateExampleFromSchema(schema.anyOf[0], definitions, visited);
+      }
+      return null;
+  }
+};
+
+/**
+ * Parse response schema from OpenAPI responses object
+ */
+const parseResponseSchema = (responses: any, definitions?: any): ExpectedResponse | undefined => {
+  if (!responses) return undefined;
+
+  // Try common success status codes
+  const successResponse = responses['200'] || responses['201'] || responses['default'];
+  if (!successResponse) return undefined;
+
+  // OpenAPI 3.x: content.application/json.schema
+  // Swagger 2.x: schema directly
+  const schema = successResponse.content?.['application/json']?.schema || successResponse.schema;
+
+  let example: string | undefined;
+  if (schema) {
+    const exampleObj = generateExampleFromSchema(schema, definitions);
+    if (exampleObj !== null) {
+      try {
+        example = JSON.stringify(exampleObj, null, 2);
+      } catch (e) {
+        example = undefined;
+      }
+    }
+  }
+
+  // Get status code
+  let status = 200;
+  if (responses['201']) status = 201;
+
+  return {
+    status,
+    description: successResponse.description,
+    schema,
+    example
+  };
+};
+
+/**
+ * Parse Swagger/OpenAPI JSON and return structured result with tag groups
+ */
+export const parseSwagger = (jsonContent: string): SwaggerParseResult | null => {
   try {
     const spec = JSON.parse(jsonContent);
-    const requests: HttpRequest[] = [];
 
-    if (!spec.paths) return [];
+    if (!spec.paths) return null;
 
+    const apiTitle = spec.info?.title || 'Imported API';
+
+    // Get definitions for $ref resolution (Swagger 2.x vs OpenAPI 3.x)
+    const definitions = spec.definitions || spec.components?.schemas || {};
+
+    // Build tag descriptions map
+    const tagDescriptions: Record<string, string> = {};
+    if (spec.tags && Array.isArray(spec.tags)) {
+      spec.tags.forEach((tag: any) => {
+        if (tag.name) {
+          tagDescriptions[tag.name] = tag.description || '';
+        }
+      });
+    }
+
+    // Group requests by tag
+    const tagMap: Map<string, HttpRequest[]> = new Map();
     const baseUrl = spec.servers?.[0]?.url || `http://${spec.host || 'localhost'}${spec.basePath || ''}`;
 
     Object.entries(spec.paths).forEach(([pathName, methods]: [string, any]) => {
       Object.entries(methods).forEach(([methodName, details]: [string, any]) => {
-        if (['get', 'post', 'put', 'delete', 'patch', 'head', 'options'].includes(methodName.toLowerCase())) {
-          const reqId = generateId();
-          let url = baseUrl + pathName;
-          // Handle path parameters conversion {param} -> :param or keep as is? 
-          // Let's keep as is or simple placeholders.
+        if (!['get', 'post', 'put', 'delete', 'patch', 'head', 'options'].includes(methodName.toLowerCase())) {
+          return;
+        }
 
-          const headers: KeyValue[] = [];
-          const params: KeyValue[] = [];
-          let bodyType: HttpRequest['bodyType'] = 'none';
-          let bodyRaw = '';
-          let bodyForm: KeyValue[] = [];
+        const reqId = generateId();
+        let url = baseUrl + pathName;
 
-          // Parameters
-          if (details.parameters) {
-            details.parameters.forEach((param: any) => {
-              if (param.in === 'query') {
-                params.push({ id: generateId(), key: param.name, value: '', enabled: true });
-              } else if (param.in === 'header') {
-                headers.push({ id: generateId(), key: param.name, value: '', enabled: true });
-              }
+        const headers: KeyValue[] = [];
+        const params: KeyValue[] = [];
+        let bodyType: HttpRequest['bodyType'] = 'none';
+        let bodyRaw = '';
+        let bodyForm: KeyValue[] = [];
+
+        // Get path parameters for URL substitution hints
+        const pathParams: Record<string, string> = {};
+
+        // Process parameters (both path-level and operation-level)
+        const allParams = [...(methods.parameters || []), ...(details.parameters || [])];
+
+        allParams.forEach((param: any) => {
+          const exampleValue = generateExampleValue(param);
+          const description = param.description || '';
+
+          if (param.in === 'query') {
+            params.push({
+              id: generateId(),
+              key: param.name,
+              value: exampleValue,
+              enabled: true,
+              description
             });
+          } else if (param.in === 'header') {
+            headers.push({
+              id: generateId(),
+              key: param.name,
+              value: exampleValue,
+              enabled: true,
+              description
+            });
+          } else if (param.in === 'path') {
+            pathParams[param.name] = exampleValue || `{${param.name}}`;
           }
+        });
 
-          // Body (OpenAPI v3)
-          if (details.requestBody && details.requestBody.content) {
-            const content = details.requestBody.content;
-            if (content['application/json']) {
-              bodyType = 'raw';
-              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
-              // Try to generate sample JSON from schema? For now leave empty or {}
-              bodyRaw = '{}';
-            } else if (content['application/x-www-form-urlencoded']) {
-              bodyType = 'x-www-form-urlencoded';
-              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
-            } else if (content['multipart/form-data']) {
-              bodyType = 'form-data';
-              // headers.push({ id: generateId(), key: 'Content-Type', value: 'multipart/form-data', enabled: true }); // Browser sets this
-            }
-          }
+        // Substitute path parameters in URL
+        Object.entries(pathParams).forEach(([name, value]) => {
+          url = url.replace(`{${name}}`, value || `{${name}}`);
+        });
 
-          // Body (Swagger v2)
-          if (details.parameters) {
-            const bodyParam = details.parameters.find((p: any) => p.in === 'body');
-            if (bodyParam) {
-              bodyType = 'raw';
-              bodyRaw = '{}';
-              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
-            }
-            const formDataParams = details.parameters.filter((p: any) => p.in === 'formData');
-            if (formDataParams.length > 0) {
-              // Check consumes
-              const consumes = details.consumes || spec.consumes || [];
-              if (consumes.includes('multipart/form-data')) {
-                bodyType = 'form-data';
+        // Body (OpenAPI v3)
+        if (details.requestBody && details.requestBody.content) {
+          const content = details.requestBody.content;
+          if (content['application/json']) {
+            bodyType = 'raw';
+            headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
+            // Generate body example from schema
+            const bodySchema = content['application/json'].schema;
+            if (bodySchema) {
+              const bodyExample = generateExampleFromSchema(bodySchema, definitions);
+              if (bodyExample !== null) {
+                try {
+                  bodyRaw = JSON.stringify(bodyExample, null, 2);
+                } catch (e) {
+                  bodyRaw = '{}';
+                }
               } else {
-                bodyType = 'x-www-form-urlencoded';
-                headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
+                bodyRaw = '{}';
               }
-              formDataParams.forEach((p: any) => {
-                bodyForm.push({ id: generateId(), key: p.name, value: '', enabled: true, type: p.type === 'file' ? 'file' : 'text' });
+            } else {
+              bodyRaw = '{}';
+            }
+          } else if (content['application/x-www-form-urlencoded']) {
+            bodyType = 'x-www-form-urlencoded';
+            headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
+            // Parse form fields from schema
+            const formSchema = content['application/x-www-form-urlencoded'].schema;
+            if (formSchema?.properties) {
+              Object.entries(formSchema.properties).forEach(([key, propSchema]: [string, any]) => {
+                bodyForm.push({
+                  id: generateId(),
+                  key,
+                  value: generateExampleValue({ ...propSchema, name: key }),
+                  enabled: true,
+                  type: 'text',
+                  description: propSchema.description
+                });
+              });
+            }
+          } else if (content['multipart/form-data']) {
+            bodyType = 'form-data';
+            const formSchema = content['multipart/form-data'].schema;
+            if (formSchema?.properties) {
+              Object.entries(formSchema.properties).forEach(([key, propSchema]: [string, any]) => {
+                bodyForm.push({
+                  id: generateId(),
+                  key,
+                  value: generateExampleValue({ ...propSchema, name: key }),
+                  enabled: true,
+                  type: propSchema.format === 'binary' ? 'file' : 'text',
+                  description: propSchema.description
+                });
               });
             }
           }
-
-          requests.push({
-            id: reqId,
-            name: details.summary || `${methodName.toUpperCase()} ${pathName}`,
-            url: url,
-            method: methodName.toUpperCase() as any,
-            headers,
-            params,
-            bodyType,
-            bodyRaw,
-            bodyForm,
-            bodyRawType: 'json'
-          });
         }
+
+        // Body (Swagger v2)
+        if (details.parameters) {
+          const bodyParam = details.parameters.find((p: any) => p.in === 'body');
+          if (bodyParam && bodyParam.schema) {
+            bodyType = 'raw';
+            const bodyExample = generateExampleFromSchema(bodyParam.schema, definitions);
+            if (bodyExample !== null) {
+              try {
+                bodyRaw = JSON.stringify(bodyExample, null, 2);
+              } catch (e) {
+                bodyRaw = '{}';
+              }
+            } else {
+              bodyRaw = '{}';
+            }
+            headers.push({ id: generateId(), key: 'Content-Type', value: 'application/json', enabled: true });
+          }
+
+          const formDataParams = details.parameters.filter((p: any) => p.in === 'formData');
+          if (formDataParams.length > 0) {
+            const consumes = details.consumes || spec.consumes || [];
+            if (consumes.includes('multipart/form-data')) {
+              bodyType = 'form-data';
+            } else {
+              bodyType = 'x-www-form-urlencoded';
+              headers.push({ id: generateId(), key: 'Content-Type', value: 'application/x-www-form-urlencoded', enabled: true });
+            }
+            formDataParams.forEach((p: any) => {
+              bodyForm.push({
+                id: generateId(),
+                key: p.name,
+                value: generateExampleValue(p),
+                enabled: true,
+                type: p.type === 'file' ? 'file' : 'text',
+                description: p.description
+              });
+            });
+          }
+        }
+
+        // Parse response schema
+        const expectedResponse = parseResponseSchema(details.responses, definitions);
+
+        const request: HttpRequest = {
+          id: reqId,
+          name: details.summary || details.operationId || `${methodName.toUpperCase()} ${pathName}`,
+          description: details.description,
+          url: url,
+          method: methodName.toUpperCase() as any,
+          headers,
+          params,
+          bodyType,
+          bodyRaw,
+          bodyForm,
+          bodyRawType: 'json',
+          expectedResponse
+        };
+
+        // Group by first tag, or 'default' if no tags
+        const tagName = (details.tags && details.tags.length > 0) ? details.tags[0] : 'default';
+        if (!tagMap.has(tagName)) {
+          tagMap.set(tagName, []);
+        }
+        tagMap.get(tagName)!.push(request);
       });
     });
 
-    return requests;
+    // Convert map to TagGroup array
+    const tagGroups: TagGroup[] = [];
+    tagMap.forEach((requests, name) => {
+      tagGroups.push({
+        name,
+        description: tagDescriptions[name],
+        requests
+      });
+    });
+
+    // Sort tag groups alphabetically, but keep 'default' at the end
+    tagGroups.sort((a, b) => {
+      if (a.name === 'default') return 1;
+      if (b.name === 'default') return -1;
+      return a.name.localeCompare(b.name);
+    });
+
+    return {
+      apiTitle,
+      tagGroups
+    };
   } catch (e) {
     console.error("Failed to parse Swagger", e);
-    return [];
+    return null;
   }
 };
+
