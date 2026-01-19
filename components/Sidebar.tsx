@@ -56,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'collection' | 'request' | 'log', id: string, data?: any } | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [filterText, setFilterText] = useState('');
+    const [collectionFilter, setCollectionFilter] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editingType, setEditingType] = useState<'collection' | 'request' | null>(null);
     const [editName, setEditName] = useState('');
@@ -255,6 +256,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 ) : (
                     <div className="flex flex-col min-h-full">
+                        {/* Search Box */}
+                        <div className="px-2 pt-2 pb-1">
+                            <div className="relative">
+                                <svg className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                <input
+                                    type="text"
+                                    value={collectionFilter}
+                                    onChange={(e) => setCollectionFilter(e.target.value)}
+                                    placeholder="Search by name or URL..."
+                                    className="w-full pl-8 pr-7 py-1.5 text-xs border border-gray-200 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-indigo-300 focus:border-indigo-300 placeholder:text-gray-400"
+                                />
+                                {collectionFilter && (
+                                    <button
+                                        onClick={() => setCollectionFilter('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    >
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
                         <div
                             className={`flex flex-col p-2 min-h-[40px] transition-colors ${isDragOverRootZone ? 'bg-indigo-100/50 outline-dashed outline-2 outline-indigo-400 rounded-md m-1' : ''}`}
                             onDragOver={(e) => handleDragOver(e, null)}
@@ -263,7 +286,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         >
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Requests</div>
                             <div className="space-y-0.5">
-                                {rootRequests.map(renderRequestItem)}
+                                {rootRequests
+                                    .filter(req => {
+                                        if (!collectionFilter) return true;
+                                        const lower = collectionFilter.toLowerCase();
+                                        return req.name.toLowerCase().includes(lower) || req.url.toLowerCase().includes(lower);
+                                    })
+                                    .map(renderRequestItem)}
                             </div>
                         </div>
 
@@ -271,62 +300,106 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                         <div className="flex flex-col p-2 space-y-1">
                             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Collections</div>
-                            {collections.map(col => {
-                                // Calculate total request count including subCollections
-                                const totalRequests = col.requests.length +
-                                    (col.subCollections?.reduce((acc, sub) => acc + sub.requests.length, 0) || 0);
+                            {collections
+                                .map(col => {
+                                    // Filter logic for search
+                                    if (collectionFilter) {
+                                        const lower = collectionFilter.toLowerCase();
 
-                                return (
-                                    <div
-                                        key={col.id}
-                                        className={`rounded-md overflow-hidden transition-all pb-1 ${dragOverColId === col.id ? 'bg-blue-100 outline-dashed outline-2 outline-blue-400 m-0.5' : ''}`}
-                                        onDragOver={(e) => handleDragOver(e, col.id)}
-                                        onDrop={(e) => handleDrop(e, col.id)}
-                                        onDragLeave={handleDragLeave}
-                                    >
-                                        <div className="flex items-center px-2 py-1.5 hover:bg-gray-200 cursor-pointer group" onClick={() => onToggleCollapse(col.id)} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'collection', id: col.id, data: col }); }}>
-                                            <svg className={`w-3.5 h-3.5 text-gray-400 mr-2 transform transition-transform ${col.collapsed ? '-rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
-                                            {col.isSwaggerRoot && (
-                                                <svg className="w-3 h-3 text-orange-500 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>
-                                            )}
-                                            {editingId === col.id && editingType === 'collection' ? (
-                                                <input autoFocus value={editName} onClick={(e) => e.stopPropagation()} onChange={(e) => setEditName(e.target.value)} onBlur={submitRename} onKeyDown={(e) => e.key === 'Enter' && submitRename()} className="flex-1 text-sm border border-blue-400 rounded px-1 outline-none h-6" />
-                                            ) : (
-                                                <span className="text-sm font-bold text-gray-700 flex-1 truncate select-none" onDoubleClick={(e) => { e.stopPropagation(); setEditingId(col.id); setEditingType('collection'); setEditName(col.name); }}>{col.name}</span>
-                                            )}
-                                            <span className="text-[10px] text-gray-400 font-bold ml-1">{totalRequests}</span>
-                                        </div>
-                                        {!col.collapsed && (
-                                            <div className="ml-5 pl-2 border-l border-gray-200 py-0.5 space-y-0.5 mr-1">
-                                                {/* Render direct requests first */}
-                                                {col.requests.map(renderRequestItem)}
+                                        // Check if collection name matches
+                                        const colNameMatches = col.name.toLowerCase().includes(lower);
 
-                                                {/* Render subCollections (for Swagger tag groups) */}
-                                                {col.subCollections && col.subCollections.map(subCol => (
-                                                    <div key={subCol.id} className="mt-1">
-                                                        <div
-                                                            className="flex items-center px-1 py-1 hover:bg-gray-100 cursor-pointer rounded text-xs"
-                                                            onClick={() => onToggleCollapse(subCol.id)}
-                                                        >
-                                                            <svg className={`w-3 h-3 text-gray-400 mr-1.5 transform transition-transform ${subCol.collapsed ? '-rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
-                                                            <svg className="w-3 h-3 text-yellow-500 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
-                                                            <span className="font-semibold text-gray-600 flex-1 truncate">{subCol.name}</span>
-                                                            <span className="text-[9px] text-gray-400 font-bold">{subCol.requests.length}</span>
-                                                        </div>
-                                                        {!subCol.collapsed && (
-                                                            <div className="ml-4 pl-2 border-l border-gray-100 space-y-0.5">
-                                                                {subCol.requests.map(renderRequestItem)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                ))}
+                                        // Filter direct requests
+                                        const matchingRequests = col.requests.filter(req =>
+                                            req.name.toLowerCase().includes(lower) || req.url.toLowerCase().includes(lower)
+                                        );
 
-                                                {totalRequests === 0 && <div className="text-[10px] text-gray-400 italic py-1 pl-2">Empty</div>}
+                                        // Filter subCollections and their requests
+                                        const matchingSubCols = col.subCollections?.map(sub => {
+                                            const subMatches = sub.name.toLowerCase().includes(lower);
+                                            const subReqs = sub.requests.filter(req =>
+                                                req.name.toLowerCase().includes(lower) || req.url.toLowerCase().includes(lower)
+                                            );
+                                            if (subMatches || subReqs.length > 0) {
+                                                return { ...sub, requests: subMatches ? sub.requests : subReqs, collapsed: false };
+                                            }
+                                            return null;
+                                        }).filter(Boolean) as typeof col.subCollections;
+
+                                        // Skip this collection if nothing matches
+                                        if (!colNameMatches && matchingRequests.length === 0 && (!matchingSubCols || matchingSubCols.length === 0)) {
+                                            return null;
+                                        }
+
+                                        // Return filtered collection (auto-expanded when searching)
+                                        return {
+                                            ...col,
+                                            requests: colNameMatches ? col.requests : matchingRequests,
+                                            subCollections: colNameMatches ? col.subCollections : matchingSubCols,
+                                            collapsed: false
+                                        };
+                                    }
+                                    return col;
+                                })
+                                .filter(Boolean)
+                                .map(col => {
+                                    if (!col) return null;
+
+                                    // Calculate total request count including subCollections
+                                    const totalRequests = col.requests.length +
+                                        (col.subCollections?.reduce((acc, sub) => acc + sub.requests.length, 0) || 0);
+
+                                    return (
+                                        <div
+                                            key={col.id}
+                                            className={`rounded-md overflow-hidden transition-all pb-1 ${dragOverColId === col.id ? 'bg-blue-100 outline-dashed outline-2 outline-blue-400 m-0.5' : ''}`}
+                                            onDragOver={(e) => handleDragOver(e, col.id)}
+                                            onDrop={(e) => handleDrop(e, col.id)}
+                                            onDragLeave={handleDragLeave}
+                                        >
+                                            <div className="flex items-center px-2 py-1.5 hover:bg-gray-200 cursor-pointer group" onClick={() => onToggleCollapse(col.id)} onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, type: 'collection', id: col.id, data: col }); }}>
+                                                <svg className={`w-3.5 h-3.5 text-gray-400 mr-2 transform transition-transform ${col.collapsed ? '-rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                                                {col.isSwaggerRoot && (
+                                                    <svg className="w-3 h-3 text-orange-500 mr-1.5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z" /></svg>
+                                                )}
+                                                {editingId === col.id && editingType === 'collection' ? (
+                                                    <input autoFocus value={editName} onClick={(e) => e.stopPropagation()} onChange={(e) => setEditName(e.target.value)} onBlur={submitRename} onKeyDown={(e) => e.key === 'Enter' && submitRename()} className="flex-1 text-sm border border-blue-400 rounded px-1 outline-none h-6" />
+                                                ) : (
+                                                    <span className="text-sm font-bold text-gray-700 flex-1 truncate select-none" onDoubleClick={(e) => { e.stopPropagation(); setEditingId(col.id); setEditingType('collection'); setEditName(col.name); }}>{col.name}</span>
+                                                )}
+                                                <span className="text-[10px] text-gray-400 font-bold ml-1">{totalRequests}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                            {!col.collapsed && (
+                                                <div className="ml-5 pl-2 border-l border-gray-200 py-0.5 space-y-0.5 mr-1">
+                                                    {/* Render direct requests first */}
+                                                    {col.requests.map(renderRequestItem)}
+
+                                                    {/* Render subCollections (for Swagger tag groups) */}
+                                                    {col.subCollections && col.subCollections.map(subCol => (
+                                                        <div key={subCol.id} className="mt-1">
+                                                            <div
+                                                                className="flex items-center px-1 py-1 hover:bg-gray-100 cursor-pointer rounded text-xs"
+                                                                onClick={() => onToggleCollapse(subCol.id)}
+                                                            >
+                                                                <svg className={`w-3 h-3 text-gray-400 mr-1.5 transform transition-transform ${subCol.collapsed ? '-rotate-90' : ''}`} fill="currentColor" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" /></svg>
+                                                                <svg className="w-3 h-3 text-yellow-500 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" /></svg>
+                                                                <span className="font-semibold text-gray-600 flex-1 truncate">{subCol.name}</span>
+                                                                <span className="text-[9px] text-gray-400 font-bold">{subCol.requests.length}</span>
+                                                            </div>
+                                                            {!subCol.collapsed && (
+                                                                <div className="ml-4 pl-2 border-l border-gray-100 space-y-0.5">
+                                                                    {subCol.requests.map(renderRequestItem)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+
+                                                    {totalRequests === 0 && <div className="text-[10px] text-gray-400 italic py-1 pl-2">Empty</div>}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                         </div>
                     </div>
                 )}
