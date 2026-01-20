@@ -27,6 +27,9 @@ interface SidebarProps {
     onDeleteRequest: (req: HttpRequest) => void;
     onDuplicateRequest: (reqId: string) => void;
     onToggleCollapse: (colId: string) => void;
+    onCollapseAll: () => void;
+    onExpandAll: () => void;
+    onLocateCurrent: () => void;
     onMoveRequest: (reqId: string, targetColId: string | null) => void;
     isRecording?: boolean;
     onToggleRecording?: () => void;
@@ -51,7 +54,7 @@ const copyToClipboard = (text: string): boolean => {
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
-    activeTab, onTabChange, history, onImportLoggedRequest, collections, rootRequests, tabs, activeRequestId, onSelectRequest, onCreateCollection, onCreateRequest, onImportCurl, onImportSwagger, onClearHistory, onDeleteLog, onRenameCollection, onRenameRequest, onDeleteCollection, onDeleteRequest, onDuplicateRequest, onToggleCollapse, onMoveRequest, isRecording, onToggleRecording, onCollapseSidebar, onResetAllData
+    activeTab, onTabChange, history, onImportLoggedRequest, collections, rootRequests, tabs, activeRequestId, onSelectRequest, onCreateCollection, onCreateRequest, onImportCurl, onImportSwagger, onClearHistory, onDeleteLog, onRenameCollection, onRenameRequest, onDeleteCollection, onDeleteRequest, onDuplicateRequest, onToggleCollapse, onCollapseAll, onExpandAll, onLocateCurrent, onMoveRequest, isRecording, onToggleRecording, onCollapseSidebar, onResetAllData
 }) => {
     const [contextMenu, setContextMenu] = useState<{ x: number, y: number, type: 'collection' | 'request' | 'log', id: string, data?: any } | null>(null);
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -299,7 +302,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <div className="h-px bg-gray-200 my-2 mx-4" />
 
                         <div className="flex flex-col p-2 space-y-1">
-                            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2 mb-1">Collections</div>
+                            <div className="flex items-center justify-between mb-1 px-2">
+                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Collections</div>
+                                <div className="flex items-center space-x-0.5">
+                                    <button onClick={onCollapseAll} title="Collapse All" className="p-0.5 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" /></svg>
+                                    </button>
+                                    <button onClick={onExpandAll} title="Expand All" className="p-0.5 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                                    </button>
+                                    <button onClick={onLocateCurrent} title="Locate Current Request" className="p-0.5 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 transition-colors">
+                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                    </button>
+                                </div>
+                            </div>
                             {collections
                                 .map(col => {
                                     // Filter logic for search

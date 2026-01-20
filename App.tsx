@@ -451,7 +451,7 @@ const App: React.FC = () => {
             name: tag.name,
             description: tag.description,
             requests: tag.requests,
-            collapsed: false
+            collapsed: true
         }));
 
         // Count total requests
@@ -467,7 +467,7 @@ const App: React.FC = () => {
             nextCols[existingIdx] = {
                 ...nextCols[existingIdx],
                 subCollections,
-                collapsed: false
+                collapsed: true
             };
         } else {
             // Create new root collection with nested sub-collections
@@ -477,7 +477,7 @@ const App: React.FC = () => {
                 isSwaggerRoot: true,
                 subCollections,
                 requests: [], // Root has no direct requests
-                collapsed: false
+                collapsed: true
             };
             nextCols = [...collections, newCol];
         }
@@ -505,6 +505,82 @@ const App: React.FC = () => {
         }
     };
 
+    const handleCollapseAll = () => {
+        const toggle = (cols: CollectionItem[], isCollapsed: boolean): CollectionItem[] => {
+            return cols.map(c => ({
+                ...c,
+                collapsed: isCollapsed,
+                subCollections: c.subCollections ? toggle(c.subCollections, isCollapsed) : undefined
+            }));
+        };
+        const next = toggle(collections, true);
+        setCollections(next);
+        chrome.storage.local.set({ collections: next });
+    };
+
+    const handleExpandAll = () => {
+        const toggle = (cols: CollectionItem[], isCollapsed: boolean): CollectionItem[] => {
+            return cols.map(c => ({
+                ...c,
+                collapsed: isCollapsed,
+                subCollections: c.subCollections ? toggle(c.subCollections, isCollapsed) : undefined
+            }));
+        };
+        const next = toggle(collections, false);
+        setCollections(next);
+        chrome.storage.local.set({ collections: next });
+    };
+
+    const handleLocateCurrent = () => {
+        if (!activeRequest || !activeRequest.id) return;
+
+        let foundColId: string | null = null;
+        let foundSubColId: string | null = null;
+
+        // Search collections
+        for (const col of collections) {
+            // Direct request
+            if (col.requests.some(r => r.id === activeRequest.id)) {
+                foundColId = col.id;
+                break;
+            }
+            // Sub-collections
+            if (col.subCollections) {
+                for (const sub of col.subCollections) {
+                    if (sub.requests.some(r => r.id === activeRequest.id)) {
+                        foundColId = col.id;
+                        foundSubColId = sub.id;
+                        break;
+                    }
+                }
+                if (foundColId) break;
+            }
+        }
+
+        if (foundColId) {
+            const next = collections.map(c => {
+                if (c.id === foundColId) {
+                    let nextCol = { ...c, collapsed: false };
+                    if (foundSubColId && nextCol.subCollections) {
+                        nextCol.subCollections = nextCol.subCollections.map(sub =>
+                            sub.id === foundSubColId ? { ...sub, collapsed: false } : sub
+                        );
+                    }
+                    return nextCol;
+                }
+                return c;
+            });
+            setCollections(next);
+            chrome.storage.local.set({ collections: next });
+            setSidebarTab('collections');
+        } else {
+            // Maybe in rootRequests?
+            if (rootRequests.some(r => r.id === activeRequest.id)) {
+                setSidebarTab('collections');
+            }
+        }
+    };
+
     return (
         <div className="flex h-screen w-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
             {!isSidebarCollapsed && (
@@ -516,12 +592,12 @@ const App: React.FC = () => {
                     collections={collections}
                     rootRequests={rootRequests}
                     tabs={tabs}
-                    activeRequestId={activeTabId}
+                    activeRequestId={activeRequest?.id}
                     onSelectRequest={openRequestInTab}
                     onCreateCollection={() => { const newCol = { id: generateId(), name: 'New Collection', requests: [], collapsed: false }; const next = [...collections, newCol]; setCollections(next); chrome.storage.local.set({ collections: next }); setSidebarTab('collections'); }}
                     onCreateRequest={handleCreateRequest}
-                    onImportCurl={() => setIsCurlModalOpen(true)}
-                    onImportSwagger={() => setIsSwaggerModalOpen(true)}
+                    onImportCurl={() => { setCurlInput(''); setIsCurlModalOpen(true); }}
+                    onImportSwagger={() => { setSwaggerInput(''); setIsSwaggerModalOpen(true); }}
                     onClearHistory={() => { setHistory([]); chrome.storage.local.set({ logs: [] }); }}
                     onDeleteLog={(id) => { const next = history.filter(h => h.id !== id); setHistory(next); chrome.storage.local.set({ logs: next }); handleTabClose(id); }}
                     onRenameCollection={(id, name) => { const next = collections.map(c => c.id === id ? { ...c, name } : c); setCollections(next); chrome.storage.local.set({ collections: next }); }}
@@ -575,6 +651,9 @@ const App: React.FC = () => {
                             return c;
                         }));
                     }}
+                    onCollapseAll={handleCollapseAll}
+                    onExpandAll={handleExpandAll}
+                    onLocateCurrent={handleLocateCurrent}
                     onMoveRequest={handleSaveToCollection}
                     isRecording={isRecording}
                     onToggleRecording={() => { setIsRecording(!isRecording); chrome.storage.local.set({ isRecording: !isRecording }); }}
