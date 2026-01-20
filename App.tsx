@@ -1,15 +1,15 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { RequestHeader } from './components/RequestHeader';
 import { RequestEditor } from './components/RequestEditor';
 import { ResponseViewer } from './components/ResponseViewer';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { Modal } from './components/Modal';
+import { EnvironmentManager } from './components/EnvironmentManager';
 import { TabBar } from './components/TabBar';
-import { HttpRequest, HttpResponse, LoggedRequest, SidebarTab, CollectionItem, KeyValue, TabItem } from './types';
+import { HttpRequest, HttpResponse, LoggedRequest, SidebarTab, CollectionItem, KeyValue, TabItem, Environment } from './types';
 import { generateId, queryStringToParams, parseCurl, parseSwagger, SwaggerParseResult, TagGroup } from './utils';
-
 // 浏览器禁止通过 fetch 接口设置的请求头列表
 const FORBIDDEN_HEADERS = [
     'cookie', 'cookie2', 'origin', 'referer', 'host', 'connection', 'content-length',
@@ -56,13 +56,16 @@ const convertLogToRequest = (log: LoggedRequest): HttpRequest => {
     } catch (e) { }
     return { ...createNewRequest(), id: log.id, url: log.url, method: log.method as any, name: smartName, params: queryStringToParams(log.url.split('?')[1] || ''), headers, bodyType, bodyRaw, bodyForm };
 };
-
 const App: React.FC = () => {
     const [tabs, setTabs] = useState<TabItem[]>([{ id: 'welcome', type: 'welcome', title: 'Welcome' }]);
     const [activeTabId, setActiveTabId] = useState<string>('welcome');
     const [sidebarTab, setSidebarTab] = useState<SidebarTab>('history');
     const [history, setHistory] = useState<LoggedRequest[]>([]);
     const [collections, setCollections] = useState<CollectionItem[]>([]);
+    const [environments, setEnvironments] = useState<Environment[]>([]);
+    const [activeEnvId, setActiveEnvId] = useState<string | null>(null);
+    const [isEnvManagerOpen, setIsEnvManagerOpen] = useState(false);
+    const [useBrowserCookies, setUseBrowserCookies] = useState(true);
     const [rootRequests, setRootRequests] = useState<HttpRequest[]>([]);
     const [isRecording, setIsRecording] = useState(false);
     const [isCurlModalOpen, setIsCurlModalOpen] = useState(false);
@@ -71,6 +74,7 @@ const App: React.FC = () => {
     const [curlInput, setCurlInput] = useState('');
     const [swaggerInput, setSwaggerInput] = useState('');
     const initializedRef = useRef(false);
+    const lastUndoPushRef = useRef<Record<string, number>>({});
 
     const activeTab = tabs.find(t => t.id === activeTabId);
     const activeRequest = activeTab?.data || null;
@@ -80,9 +84,14 @@ const App: React.FC = () => {
 
     useEffect(() => {
         if (chrome && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.get(['collections', 'logs', 'savedTabs', 'savedActiveTabId', 'isRecording', 'rootRequests'], (result) => {
+            chrome.storage.local.get(['collections', 'logs', 'savedTabs', 'savedActiveTabId', 'isRecording', 'rootRequests', 'environments', 'activeEnvId', 'useBrowserCookies'], (result) => {
                 if (result.collections) setCollections(result.collections);
                 if (result.rootRequests) setRootRequests(result.rootRequests);
+                if (result.environments) setEnvironments(result.environments);
+                if (result.activeEnvId) setActiveEnvId(result.activeEnvId);
+                // default true if undefined
+                if (result.useBrowserCookies !== undefined) setUseBrowserCookies(result.useBrowserCookies);
+
                 setIsRecording(!!result.isRecording);
 
                 const logs = result.logs || [];
@@ -223,8 +232,87 @@ const App: React.FC = () => {
 
     const handleTabClick = (id: string) => setActiveTabId(id);
 
+    const handleUndo = useCallback(() => {
+        if (!activeRequest || !activeTab) return;
+        const stack = activeTab.undoStack || [];
+        if (stack.length === 0) return;
+
+        const previous = stack[stack.length - 1];
+        const newStack = stack.slice(0, -1);
+        const newRedo = [...(activeTab.redoStack || []), activeRequest];
+
+        const updatedTab = { ...activeTab, data: previous, undoStack: newStack, redoStack: newRedo, title: previous.name, method: previous.method };
+
+        setTabs(prev => prev.map(t => t.id === activeTab.id ? updatedTab : t));
+
+        const updatedReq = previous;
+        const nextRoots = rootRequests.map(r => r.id === updatedReq.id ? updatedReq : r);
+        const nextCols = collections.map(c => ({
+            ...c,
+            requests: c.requests.map(r => r.id === updatedReq.id ? updatedReq : r)
+        }));
+        setRootRequests(nextRoots);
+        setCollections(nextCols);
+        chrome.storage.local.set({ rootRequests: nextRoots, collections: nextCols });
+    }, [activeTab, activeRequest, rootRequests, collections]);
+
+    const handleRedo = useCallback(() => {
+        if (!activeRequest || !activeTab) return;
+        const stack = activeTab.redoStack || [];
+        if (stack.length === 0) return;
+
+        const next = stack[stack.length - 1];
+        const newRedo = stack.slice(0, -1);
+        const newUndo = [...(activeTab.undoStack || []), activeRequest];
+
+        const updatedTab = { ...activeTab, data: next, undoStack: newUndo, redoStack: newRedo, title: next.name, method: next.method };
+
+        setTabs(prev => prev.map(t => t.id === activeTab.id ? updatedTab : t));
+
+        const updatedReq = next;
+        const nextRoots = rootRequests.map(r => r.id === updatedReq.id ? updatedReq : r);
+        const nextCols = collections.map(c => ({
+            ...c,
+            requests: c.requests.map(r => r.id === updatedReq.id ? updatedReq : r)
+        }));
+        setRootRequests(nextRoots);
+        setCollections(nextCols);
+        chrome.storage.local.set({ rootRequests: nextRoots, collections: nextCols });
+    }, [activeTab, activeRequest, rootRequests, collections]);
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+                e.preventDefault();
+                if (e.shiftKey) handleRedo(); else handleUndo();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+                e.preventDefault();
+                handleRedo();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleUndo, handleRedo]);
+
     const updateActiveRequest = (updatedReq: HttpRequest) => {
-        setTabs(prev => prev.map(t => t.id === updatedReq.id ? { ...t, data: updatedReq, title: updatedReq.name, method: updatedReq.method } : t));
+        setTabs(prev => prev.map(t => {
+            if (t.id === updatedReq.id) {
+                const now = Date.now();
+                const lastPush = lastUndoPushRef.current[t.id] || 0;
+                let newUndoStack = t.undoStack || [];
+                let newRedoStack = t.redoStack || [];
+
+                if (t.data && (now - lastPush > 800)) {
+                    newUndoStack = [...newUndoStack, t.data];
+                    if (newUndoStack.length > 50) newUndoStack = newUndoStack.slice(newUndoStack.length - 50);
+                    lastUndoPushRef.current[t.id] = now;
+                    newRedoStack = [];
+                }
+                return { ...t, data: updatedReq, title: updatedReq.name, method: updatedReq.method, undoStack: newUndoStack, redoStack: newRedoStack };
+            }
+            return t;
+        }));
         const nextRoots = rootRequests.map(r => r.id === updatedReq.id ? updatedReq : r);
         const nextCols = collections.map(c => ({
             ...c,
@@ -329,30 +417,73 @@ const App: React.FC = () => {
 
     const handleTabRename = (id: string, newName: string) => handleRenameRequest(id, newName);
 
+    const handleSaveEnvironments = (envs: Environment[]) => {
+        setEnvironments(envs);
+        chrome.storage.local.set({ environments: envs });
+        if (activeEnvId && !envs.find(e => e.id === activeEnvId)) {
+            setActiveEnvId(null);
+            chrome.storage.local.set({ activeEnvId: null });
+        }
+    };
+
+
+
     const handleSendRequest = async () => {
         if (!activeRequest) return;
         setTabs(prev => prev.map(t => t.id === activeRequest.id ? { ...t, isLoading: true, error: null, response: null } : t));
         const startTime = Date.now();
         try {
-            const enabledHeaders = activeRequest.headers.filter(h => h.enabled && h.key && !h.key.startsWith(':'));
+            // 1. Resolve Environment Base URL
+            let finalUrl = activeRequest.url;
+            if (activeRequest.url.startsWith('/')) {
+                const activeEnv = environments.find(e => e.id === activeEnvId);
+                // Only prepend if active env has base URL
+                if (activeEnv && activeEnv.baseUrl) {
+                    const base = activeEnv.baseUrl.replace(/\/$/, '');
+                    const path = activeRequest.url.replace(/^\//, '');
+                    finalUrl = `${base}/${path}`;
+                }
+            }
 
-            // 核心修改：区分 fetch 能够设置的普通 Header 和 需要通过 DNR 强制修改的敏感 Header
+            // 2. Prepare Headers
+            const enabledHeaders = activeRequest.headers.filter(h => h.enabled && h.key && !h.key.startsWith(':'));
             const safeHeaderObj: Record<string, string> = {};
             enabledHeaders.forEach(h => {
                 const lowerKey = h.key.toLowerCase();
-                // 如果不是禁止修改的请求头，且不以 Sec- 或 Proxy- 开头，则可以放入 fetch 的 headers 中
                 if (!FORBIDDEN_HEADERS.includes(lowerKey) && !lowerKey.startsWith('sec-') && !lowerKey.startsWith('proxy-')) {
                     safeHeaderObj[h.key] = h.value;
                 }
             });
 
-            // 所有的 Header（包括 Cookie/Origin）都通过 background 设置 DNR 规则
+            // 3. Prepare DNR Rules (Headers + Cookie Injection)
+            const headersForDNR = enabledHeaders.map(h => ({ key: h.key, value: h.value }));
+
+            // 3.1 Cookie Auto-Injection
+            if (useBrowserCookies) {
+                try {
+                    // Check if URL is valid for cookie lookup
+                    if (finalUrl.startsWith('http')) {
+                        const cookies = await chrome.cookies.getAll({ url: finalUrl });
+                        if (cookies && cookies.length > 0) {
+                            const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+                            // Only inject if User hasn't set a Cookie header manually
+                            if (!headersForDNR.find(h => h.key.toLowerCase() === 'cookie')) {
+                                headersForDNR.push({ key: 'Cookie', value: cookieStr });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Cookie injection error:', e);
+                }
+            }
+
+            // 3.2 Update Rules
             if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
                 await new Promise((resolve) => {
                     chrome.runtime.sendMessage({
                         type: 'SET_REQUEST_HEADERS',
-                        url: activeRequest.url,
-                        headers: enabledHeaders.map(h => ({ key: h.key, value: h.value }))
+                        url: finalUrl,
+                        headers: headersForDNR
                     }, resolve);
                 });
             }
@@ -378,12 +509,11 @@ const App: React.FC = () => {
                 }
             }
 
-            const response = await fetch(activeRequest.url, {
+            // 4. Fetch
+            const response = await fetch(finalUrl, {
                 method: activeRequest.method,
                 headers: safeHeaderObj,
                 body,
-                // 如果有自定义 Cookie，我们依赖 DNR 规则强制覆盖。
-                // credentials: 'include' 会让浏览器发送已有的 Cookie，DNR 的 HeaderOperation.SET 会将其替换为我们的值。
                 credentials: 'include'
             });
 
@@ -401,15 +531,22 @@ const App: React.FC = () => {
                 size: new Blob([responseBody]).size
             };
 
-            setTabs(prev => prev.map(t => t.id === activeRequest.id ? { ...t, isLoading: false, response: httpResponse } : t));
+            setTabs(prev => prev.map(t => t.id === activeRequest.id ? {
+                ...t,
+                isLoading: false,
+                response: httpResponse
+            } : t));
 
-            // 任务完成，清除 DNR 规则
+            // clear rules
             if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
                 chrome.runtime.sendMessage({ type: 'CLEAR_REQUEST_HEADERS' });
             }
-
         } catch (err: any) {
-            setTabs(prev => prev.map(t => t.id === activeRequest.id ? { ...t, isLoading: false, error: err.message || 'An error occurred' } : t));
+            setTabs(prev => prev.map(t => t.id === activeRequest.id ? {
+                ...t,
+                isLoading: false,
+                error: err.message || 'Network Error'
+            } : t));
             if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
                 chrome.runtime.sendMessage({ type: 'CLEAR_REQUEST_HEADERS' });
             }
@@ -677,7 +814,18 @@ const App: React.FC = () => {
                         <WelcomeScreen onCreateRequest={handleCreateRequest} onCreateCollection={() => { }} onImportCurl={() => setIsCurlModalOpen(true)} onImportSwagger={() => setIsSwaggerModalOpen(true)} />
                     ) : (
                         <>
-                            <RequestHeader request={activeRequest} onRequestChange={updateActiveRequest} onSend={handleSendRequest} isSending={activeIsLoading} />
+                            <RequestHeader
+                                request={activeRequest}
+                                onRequestChange={updateActiveRequest}
+                                onSend={handleSendRequest}
+                                isSending={activeIsLoading}
+                                environments={environments}
+                                activeEnvId={activeEnvId}
+                                onEnvChange={(id) => { setActiveEnvId(id); chrome.storage.local.set({ activeEnvId: id }); }}
+                                onManageEnvironments={() => setIsEnvManagerOpen(true)}
+                                useBrowserCookies={useBrowserCookies}
+                                onToggleBrowserCookies={() => { setUseBrowserCookies(!useBrowserCookies); chrome.storage.local.set({ useBrowserCookies: !useBrowserCookies }); }}
+                            />
                             <div className="flex-1 flex h-full overflow-hidden">
                                 <div className="w-1/2 min-w-[400px] h-full overflow-hidden border-r border-gray-100">
                                     <RequestEditor request={activeRequest} onRequestChange={updateActiveRequest} />
@@ -696,6 +844,12 @@ const App: React.FC = () => {
             <Modal isOpen={isSwaggerModalOpen} onClose={() => setIsSwaggerModalOpen(false)} title="Import Swagger/OpenAPI" onConfirm={handleImportSwaggerConfirm} confirmText="Import" confirmDisabled={!swaggerInput.trim()}>
                 <textarea value={swaggerInput} onChange={(e) => setSwaggerInput(e.target.value)} className="w-full h-40 border border-gray-300 rounded p-3 font-mono text-xs focus:outline-none focus:border-green-500 bg-gray-50" placeholder='Paste Swagger/OpenAPI JSON here...' />
             </Modal>
+            <EnvironmentManager
+                isOpen={isEnvManagerOpen}
+                onClose={() => setIsEnvManagerOpen(false)}
+                environments={environments}
+                onSave={handleSaveEnvironments}
+            />
         </div>
     );
 };

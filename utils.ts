@@ -392,7 +392,9 @@ export const parseSwagger = (jsonContent: string): SwaggerParseResult | null => 
 
     // Group requests by tag
     const tagMap: Map<string, HttpRequest[]> = new Map();
-    const baseUrl = spec.servers?.[0]?.url || `http://${spec.host || 'localhost'}${spec.basePath || ''}`;
+    // Force relative paths to allow Environment configuration overrides
+    const rawBaseUrl = spec.basePath || '';
+    const baseUrl = rawBaseUrl.replace(/\/+$/, '');
 
     Object.entries(spec.paths).forEach(([pathName, methods]: [string, any]) => {
       Object.entries(methods).forEach(([methodName, details]: [string, any]) => {
@@ -401,7 +403,8 @@ export const parseSwagger = (jsonContent: string): SwaggerParseResult | null => 
         }
 
         const reqId = generateId();
-        let url = baseUrl + pathName;
+        const cleanPath = pathName.replace(/^\/+/, '');
+        let url = `${baseUrl}/${cleanPath}`;
 
         const headers: KeyValue[] = [];
         const params: KeyValue[] = [];

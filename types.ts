@@ -12,6 +12,13 @@ export interface KeyValue {
   description?: string; // Parameter description from Swagger
 }
 
+export interface Environment {
+  id: string;
+  name: string;
+  baseUrl: string;
+  variables?: KeyValue[];
+}
+
 // Expected response structure parsed from Swagger
 export interface ExpectedResponse {
   status: number;
@@ -90,4 +97,6 @@ export interface TabItem {
   response?: HttpResponse | null;
   error?: string | null;
   isLoading?: boolean;
+  undoStack?: HttpRequest[];
+  redoStack?: HttpRequest[];
 }
