@@ -201,13 +201,21 @@ const App: React.FC = () => {
         }
     }, []); // Run once on mount to attach listener
 
+    // Debounced Persistence
     useEffect(() => {
-        if (initializedRef.current && chrome.storage && chrome.storage.local) {
+        if (!initializedRef.current || !chrome.storage || !chrome.storage.local) return;
+
+        const timeoutId = setTimeout(() => {
+            // Exclude large history stacks from tabs before saving to save space
+            // (Optional: if we want to keep undo history across reloads, remove the map logic)
+            // For now, we save everything but debounced.
             chrome.storage.local.set({
                 savedTabs: tabs,
                 savedActiveTabId: activeTabId
             });
-        }
+        }, 1000); // 1s debounce
+
+        return () => clearTimeout(timeoutId);
     }, [tabs, activeTabId]);
 
     const openRequestInTab = (req: HttpRequest) => {

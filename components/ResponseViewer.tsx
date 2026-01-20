@@ -39,8 +39,8 @@ export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error,
           <button
             onClick={() => setActiveTab('body')}
             className={`px-4 py-2 text-xs font-bold tracking-wide uppercase border-b-2 transition-colors mb-[-1px] ${activeTab === 'body'
-                ? 'border-green-600 text-green-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              ? 'border-green-600 text-green-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
           >
             BODY
@@ -48,8 +48,8 @@ export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error,
           <button
             onClick={() => setActiveTab('headers')}
             className={`px-4 py-2 text-xs font-bold tracking-wide uppercase border-b-2 transition-colors mb-[-1px] ${activeTab === 'headers'
-                ? 'border-green-600 text-green-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              ? 'border-green-600 text-green-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
           >
             HEADERS
@@ -58,8 +58,8 @@ export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error,
             <button
               onClick={() => setActiveTab('expected')}
               className={`px-4 py-2 text-xs font-bold tracking-wide uppercase border-b-2 transition-colors mb-[-1px] flex items-center ${activeTab === 'expected'
-                  ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
                 }`}
             >
               <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" /><path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" /></svg>
@@ -132,11 +132,14 @@ export const ResponseViewer: React.FC<ResponseViewerProps> = ({ response, error,
 };
 
 const ResponseContent = ({ body }: { body: string }) => {
-  let content = body;
-  try {
-    const json = JSON.parse(body);
-    content = JSON.stringify(json, null, 2);
-  } catch { }
+  const content = React.useMemo(() => {
+    try {
+      const json = JSON.parse(body);
+      return JSON.stringify(json, null, 2);
+    } catch {
+      return body;
+    }
+  }, [body]);
 
   return (
     <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap overflow-x-auto h-full select-text">
